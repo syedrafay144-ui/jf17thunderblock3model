@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JF-17 Thunder Block III – Engineering Workspace</title>
+<style>
+:root{--bg:#eaf0f8;--pn:#fbfdff;--ln:#1b4f9c;--tx:#12233b;--ac:#c25b00;--mu:#5a6d86;--bd:#b9c9de;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#070f1c;--pn:#0d1a2f;--ln:#6fb7ff;--tx:#cfe6ff;--ac:#ffb347;--mu:#7e97b5;--bd:#21406b;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#070f1c;--pn:#0d1a2f;--ln:#6fb7ff;--tx:#cfe6ff;--ac:#ffb347;--mu:#7e97b5;--bd:#21406b;color-scheme:dark}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;background:var(--bg);color:var(--tx);font:13px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--bd)}
+h1{font-size:15px;margin:0;letter-spacing:.06em}header small{color:var(--mu)}
+main{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:minmax(0,1fr) auto;gap:8px;padding:8px}
+.pn{position:relative;background:var(--pn);border:1px solid var(--bd);border-radius:8px;min-height:0;overflow:hidden}
+.chip{position:absolute;left:10px;top:8px;font:600 11px monospace;color:var(--mu);letter-spacing:.08em;z-index:2;pointer-events:none}
+#bp{width:100%;height:100%;display:block}
+#cv{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#ctl{grid-column:1/3;display:flex;flex-wrap:wrap;gap:14px 26px;padding:10px 14px}
+.grp{flex:1 1 230px;min-width:210px}.grp h2{font:600 11px monospace;color:var(--ac);margin:0 0 6px;letter-spacing:.08em}
+.row{display:grid;grid-template-columns:105px 1fr 58px;align-items:center;gap:6px;margin:3px 0}
+.row output{font-family:monospace;text-align:right;color:var(--ac)}input[type=range]{width:100%;accent-color:var(--ac)}
+button{background:transparent;color:var(--tx);border:1px solid var(--ln);border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer;margin:2px 4px 2px 0}
+button:hover{background:var(--ln);color:var(--bg)}label.ck{display:inline-flex;gap:5px;align-items:center;margin-right:10px}
+.ro{font-family:monospace;color:var(--mu);margin-top:6px}.ro b{color:var(--tx);font-weight:600}
+svg .o{fill:none;stroke:var(--ln);stroke-width:1.4}svg .f{fill:var(--ln);fill-opacity:.1}svg .hl{fill:var(--ac);fill-opacity:.3;stroke:var(--ac);stroke-width:1.4}
+svg .part{cursor:help;transition:fill-opacity .15s}svg .part:hover{fill-opacity:.45}
+svg .dm{stroke:var(--ac);stroke-width:1;fill:none}svg .ex{stroke:var(--mu);stroke-dasharray:3 3;stroke-width:.7}
+svg .bk{stroke:var(--mu);stroke-width:.8}svg .bk2{stroke:var(--ac);stroke-width:1.5}
+svg .t{fill:var(--tx);font:10.5px monospace}svg .d{fill:var(--ac);font:11px monospace;text-anchor:middle}svg .v{fill:var(--mu);font:600 11px monospace;letter-spacing:.08em}svg .ld{stroke:var(--tx);stroke-width:.7;fill:none}
+@media (max-width:900px){html,body{height:auto}main{display:flex;flex-direction:column}#bpw,#v3{height:min(120vw,620px)}#v3{height:min(95vw,480px)}.pn{flex:none}}
+</style></head>
+<body>
+<header><h1>JF-17 THUNDER BLOCK III · ENGINEERING WORKSPACE</h1><small>Procedural reference model · illustrative geometry, not OEM data</small></header>
+<main>
+ <section class="pn" id="bpw"><span class="chip">2D BLUEPRINT · TOP / SIDE / FRONT</span><svg id="bp" viewBox="0 0 820 700" preserveAspectRatio="xMidYMid meet"></svg></section>
+ <section class="pn" id="v3"><span class="chip">3D MODEL · DRAG TO ROTATE · WHEEL TO ZOOM</span><canvas id="cv"></canvas></section>
+ <section class="pn" id="ctl">
+  <div class="grp"><h2>ORIENTATION</h2><div id="s-rot"></div>
+   <label class="ck"><input type="checkbox" id="auto"> Auto-spin</label><label class="ck"><input type="checkbox" id="wire"> Wireframe</label><button id="reset">Reset</button></div>
+  <div class="grp"><h2>PARAMETRIC DIMENSIONS</h2><div id="s-dim"></div>
+   <div class="ro">Wing area ≈ <b id="ra"></b> m² · AR ≈ <b id="rar"></b></div></div>
+  <div class="grp"><h2>COMPONENTS</h2>
+   <button id="gear">Landing gear: DOWN</button><button id="load">Cycle loadout</button>
+   <div class="ro">Loadout: <b id="ln"></b></div></div>
+ </section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+/* ===== STATE ===== */
+const $=id=>document.getElementById(id), rad=d=>d*Math.PI/180;
+const DEF={rx:12,ry:-35,rz:0,span:9.45,len:14.93,chord:5};
+const P={...DEF}; let load=3, gearDown=true, gearT=1;
+const LOADS=['Clean','2× PL-10E (wingtip)','2× PL-10E + 2× PL-15E','2× PL-10E + 4× PL-15E'];
+const SL=[['rot','rx','Pitch X',-90,90,1,'°'],['rot','ry','Yaw Y',-180,180,1,'°'],['rot','rz','Roll Z',-90,90,1,'°'],
+ ['dim','span','Wingspan',7,12,.01,' m'],['dim','len','Fuselage length',12,18,.01,' m'],['dim','chord','Root chord',3,7,.01,' m']];
+
+/* ===== SHARED GEOMETRY (single source of truth for 2D + 3D) ===== */
+const PROF=[[0,.3],[.15,.5],[.45,.66],[.7,.56],[.86,.3],[.95,.12],[1,.02]];
+function R(t){for(let i=1;i<PROF.length;i++){const[a,ra]=PROF[i-1],[b,rb]=PROF[i];if(t<=b){const u=(t-a)/(b-a),k=u*u*(3-2*u);return ra+(rb-ra)*k}}return .02}
+function G(){const L=P.len,c=P.chord,s=P.span/2,zte=-L*.28,zle=zte+c,ztte=zte+.5,ztle=ztte+c*.2;
+ return{L,c,s,zte,zle,ztte,ztle,
+  fin:{rle:-L*.22,rte:-L*.47,tle:-L*.40,tte:-L*.46,y0:.45,h:2.24},
+  tail:[[.5,-L*.34],[2.3,-L*.43],[2.3,-L*.47],[.5,-L*.47]],
+  wing:[[.4,zle],[s,ztle],[s,ztte],[.4,zte]],zc:L*.18,zi:zle+.6,zirst:L*.3,wy:-.12}}
+const mir=r=>r.concat(r.map(([x,z])=>[-x,z]).reverse());
+const wingAt=(g,x)=>{const u=(x-.4)/(g.s-.4),le=g.zle+(g.ztle-g.zle)*u,te=g.zte+(g.ztte-g.zte)*u;return{le,te,mid:(le+te)/2}};
+
+/* ===== 3D ENGINE ===== */
+const cv=$('cv'),ren=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+ren.setPixelRatio(Math.min(devicePixelRatio,2));
+const scene=new THREE.Scene(),cam=new THREE.PerspectiveCamera(40,1,.1,300),jet=new THREE.Group();
+jet.rotation.order='YXZ'; scene.add(jet);
+scene.add(new THREE.AmbientLight(0xffffff,.65));
+const sun=new THREE.DirectionalLight(0xffffff,.9);sun.position.set(10,18,12);scene.add(sun);
+const fill=new THREE.DirectionalLight(0x6fa8ff,.35);fill.position.set(-12,-6,-10);scene.add(fill);
+const grid=new THREE.GridHelper(60,30,0x4d78b3,0x4d78b3);grid.position.y=-4;grid.material.transparent=true;grid.material.opacity=.25;scene.add(grid);
+const std=(c,o={})=>new THREE.MeshStandardMaterial({color:c,roughness:.55,metalness:.35,...o});
+const M={body:std(0x8d9db0),wing:std(0x74869c),dark:std(0x2c3440),radome:std(0x3c4a3f),glass:std(0x3aa0ff,{transparent:true,opacity:.7,metalness:.7,roughness:.15}),
+ irst:std(0xffb347,{emissive:0x7a4400}),msl:std(0xe8ecf1),fin:std(0xd24b3b),gear:std(0xb8c2cf),tire:std(0x15181c),glow:std(0xff7a1a,{emissive:0xff5a00})};
+let dist=30,gearG=[],mG={tip:[],in15:[],out15:[]};
+const setCam=()=>{cam.position.set(0,dist*.25,dist);cam.lookAt(0,-.5,0)};
+
+function lathe(g,t0,t1,mat){const pts=[];for(let i=0;i<=24;i++){const t=t0+(t1-t0)*i/24;pts.push(new THREE.Vector2(R(t),-g.L/2+t*g.L))}
+ const geo=new THREE.LatheGeometry(pts,32);geo.rotateX(Math.PI/2);const m=new THREE.Mesh(geo,mat);m.scale.y=.95;return m}
+function plan(pts,y,th,mat){const sh=new THREE.Shape(pts.map(([x,z])=>new THREE.Vector2(x,-z)));
+ const geo=new THREE.ExtrudeGeometry(sh,{depth:th,bevelEnabled:false});geo.rotateX(-Math.PI/2);geo.translate(0,y,0);return new THREE.Mesh(geo,mat)}
+function missile(len,r){const m=new THREE.Group(),b=new THREE.CylinderGeometry(r,r,len,14);b.rotateX(Math.PI/2);m.add(new THREE.Mesh(b,M.msl));
+ const n=new THREE.ConeGeometry(r,len*.22,14);n.rotateX(Math.PI/2);const nm=new THREE.Mesh(n,M.dark);nm.position.z=len*.61;m.add(nm);
+ for(let k=0;k<2;k++){const f=new THREE.Mesh(new THREE.BoxGeometry(r*5.5,.02,len*.12),M.dark);f.rotation.z=k*Math.PI/2;f.position.z=-len*.42;m.add(f)}return m}
+function gearLeg(x,y,z,h,tr,tw){const g=new THREE.Group(),s=new THREE.CylinderGeometry(.05,.05,h,8);s.translate(0,-h/2,0);g.add(new THREE.Mesh(s,M.gear));
+ const w=new THREE.CylinderGeometry(tr,tr,tw,18);w.rotateZ(Math.PI/2);w.translate(0,-h,0);g.add(new THREE.Mesh(w,M.tire));g.position.set(x,y,z);return g}
+
+function build(){
+ while(jet.children.length){const c=jet.children.pop();c.traverse(o=>o.geometry&&o.geometry.dispose())}
+ const g=G();gearG=[];mG={tip:[],in15:[],out15:[]};const A=o=>(jet.add(o),o);
+ A(lathe(g,0,.86,M.body));A(lathe(g,.86,1,M.radome));                       // fuselage + KLJ-7A radome
+ A(plan(mir(g.wing),g.wy,.1,M.wing));A(plan(mir(g.tail.map(([x,z])=>[x,z])),-.05,.07,M.wing)); // delta wing + tailplanes
+ const f=g.fin,fs=new THREE.Shape([[-f.rle,f.y0],[-f.tle,f.y0+f.h],[-f.tte,f.y0+f.h],[-f.rte,f.y0]].map(p=>new THREE.Vector2(...p)));
+ const fg=new THREE.ExtrudeGeometry(fs,{depth:.08,bevelEnabled:false});fg.translate(0,0,-.04);fg.rotateY(Math.PI/2);A(new THREE.Mesh(fg,M.fin)); // single fin
+ const can=new THREE.Mesh(new THREE.SphereGeometry(1,24,16),M.glass);can.scale.set(.45,.38,1.5);can.position.set(0,.55,g.zc);A(can);
+ const ir=new THREE.Mesh(new THREE.SphereGeometry(.13,16,12),M.irst);ir.position.set(0,.47,g.zirst);A(ir); // IRST
+ for(const sg of[-1,1]){ // DSI intakes
+  const ib=new THREE.Mesh(new THREE.BoxGeometry(.5,.65,1.7),M.dark);ib.position.set(sg*.8,-.15,g.zi);A(ib);
+  const bump=new THREE.Mesh(new THREE.SphereGeometry(.27,16,12),M.body);bump.scale.set(1,1,2.3);bump.position.set(sg*.8,-.12,g.zi+.85);A(bump);
+  // wingtip PL-10E
+  const t=missile(2.9,.065);t.position.set(sg*g.s,g.wy+.05,wingAt(g,g.s).mid);A(t);mG.tip.push(t);
+  // pylons + PL-15E
+  [[.5,'out15'],[.25,'in15']].forEach(([k,n])=>{const x=g.s*k+.2,w=wingAt(g,x),h=new THREE.Group(),
+   py=new THREE.Mesh(new THREE.BoxGeometry(.1,.3,Math.min(1.5,(w.le-w.te)*.7)),M.dark);py.position.y=-.15;h.add(py);
+   const m=missile(4,.1);m.position.y=-.42;h.add(m);h.position.set(sg*x,g.wy,w.mid);A(h);mG[n].push(h)});
+ }
+ const nz=new THREE.CylinderGeometry(.5,.36,1,24,1,true);nz.rotateX(Math.PI/2);const nm=new THREE.Mesh(nz,M.dark);nm.material.side=THREE.DoubleSide;nm.position.set(0,-.02,-g.L/2-.35);A(nm);
+ const cd=new THREE.Mesh(new THREE.CircleGeometry(.34,20),M.glow);cd.rotation.y=Math.PI;cd.position.set(0,-.02,-g.L/2-.3);A(cd); // aft nozzle
+ const ng=gearLeg(0,-.4,g.L*.28,1.4,.22,.14),ml=gearLeg(-1.05,-.3,g.zte+g.c*.45,1.5,.3,.2),mr=gearLeg(1.05,-.3,g.zte+g.c*.45,1.5,.3,.2);
+ [ng,ml,mr].forEach(x=>{A(x);gearG.push(x)});
+ setLoad();M.body.wireframe=false;applyWire();
+}
+function setLoad(){mG.tip.forEach(m=>m.visible=load>=1);mG.out15.forEach(m=>m.visible=load>=2);mG.in15.forEach(m=>m.visible=load>=3);$('ln').textContent=LOADS[load]}
+function applyWire(){const w=$('wire').checked;Object.values(M).forEach(m=>m.wireframe=w)}
+function applyRot(){jet.rotation.set(rad(P.rx),rad(P.ry),rad(P.rz))}
+function resize(){const r=$('v3').getBoundingClientRect();ren.setSize(r.width,r.height,false);cam.aspect=r.width/Math.max(r.height,1);cam.updateProjectionMatrix()}
+function loop(){requestAnimationFrame(loop);
+ if($('auto').checked){P.ry=((P.ry+.35+180)%360)-180;syncUI();applyRot()}
+ gearT+=((gearDown?1:0)-gearT)*.08;gearG.forEach(x=>{x.scale.y=Math.max(.001,gearT);x.visible=gearT>.03});
+ ren.render(scene,cam)}
+
+/* ===== 2D BLUEPRINT ===== */
+const S=17,pl=a=>a.map(p=>p.map(n=>n.toFixed(1)).join(',')).join(' ');
+const poly=(c,a,t)=>`<polygon class="${c}" points="${pl(a)}"><title>${t}</title></polygon>`;
+const ln=(x1,y1,x2,y2,c)=>`<line class="${c}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+const dim=(x1,y1,x2,y2,tx)=>{const mx=(x1+x2)/2,my=(y1+y2)/2,v=x1==x2;return`<line class="dm" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" marker-start="url(#a)" marker-end="url(#a)"/><text class="d" x="${v?mx-6:mx}" y="${v?my:my-5}"${v?` transform="rotate(-90 ${mx-6} ${my})"`:''}>${tx}</text>`};
+const lab=(x1,y1,x2,y2,tx,anc)=>`<path class="ld" d="M${x1},${y1}L${x2},${y2}"/><circle cx="${x1}" cy="${y1}" r="2.5" fill="var(--ac)"/><text class="t" x="${x2+(anc=='end'?-4:4)}" y="${y2+3}" text-anchor="${anc||'start'}">${tx}</text>`;
+function draw(){
+ const g=G(),{L,s,zle,zte,ztle,ztte,fin:f}=g,m=v=>v.toFixed(2)+' m';let h=`<defs><marker id="a" orient="auto-start-reverse" markerWidth="8" markerHeight="8" refX="7" refY="4"><path d="M0,0L8,4L0,8z" fill="var(--ac)"/></marker></defs>`;
+ const half=(fn,t0,t1,sg)=>{const a=[];for(let i=0;i<=14;i++){const t=t0+(t1-t0)*i/14;a.push(fn(sg*R(t),-L/2+t*L))}return a};
+ const bk=[.12,.2,.28,.36,.44,.52,.6,.68,.76], plug=[3,4];
+ /* ---- TOP ---- */
+ {const cx=200,cy=205,X=(x,z)=>[cx+x*S,cy-z*S];
+  h+=`<text class="v" x="20" y="28">TOP VIEW (PLAN)</text>`;
+  h+=poly('o f part',[...half(X,0,1,1),...half(X,0,1,-1).reverse()],'Fuselage (stretched Block III)');
+  h+=poly('hl part',[...half(X,.86,1,1),...half(X,.86,1,-1).reverse()],'KLJ-7A AESA radome');
+  h+=poly('o f part',mir(g.wing).map(([x,z])=>X(x,z)),'Delta wing');
+  h+=poly('o f part',mir(g.tail).map(([x,z])=>X(x,z)),'All-moving tailplane');
+  bk.forEach((t,i)=>{const z=-L/2+t*L,w=R(t);h+=ln(...X(-w,z),...X(w,z),plug.includes(i)?'bk2':'bk')});
+  for(const sg of[-1,1])h+=poly('o f part',[X(sg*.55,g.zi-.85),X(sg*1.05,g.zi-.85),X(sg*1.05,g.zi+.85),X(sg*.55,g.zi+.85)],'DSI intake').replace('<polygon','<polygon style="stroke-dasharray:0"')+`<ellipse class="o" cx="${cx+sg*.8*S}" cy="${cy-(g.zi+.85)*S}" rx="${.27*S}" ry="${.6*S}"/>`;
+  h+=`<ellipse class="o" cx="${cx}" cy="${cy-g.zc*S}" rx="${.45*S}" ry="${1.5*S}"/><circle cx="${cx}" cy="${cy-g.zirst*S}" r="3.5" fill="var(--ac)"/>`;
+  h+=poly('hl',[X(-.05,f.rle),X(.05,f.rle),X(.05,f.rte),X(-.05,f.rte)],'Vertical fin');
+  const[nx,ny]=X(0,L/2);h+=lab(nx,ny+6,cx+95,ny-6,'KLJ-7A AESA RADOME');
+  h+=lab(cx,cy-g.zirst*S,cx+95,cy-g.zirst*S-18,'IRST SENSOR NODE');
+  h+=lab(cx+.8*S,cy-(g.zi+.85)*S,cx+120,cy-(g.zi+.85)*S-16+30,'DSI INTAKE (x2)');
+  h+=lab(cx-.1,cy-(-L/2+bk[3]*L)*S,cx-s*S-8,cy-(-L/2+bk[3]*L)*S+40,'STRETCH BULKHEADS','end');
+  const yb=cy+L/2*S+30,xl=cx-s*S-52;
+  h+=ex2(cx-s*S,cy-ztte*S,cx-s*S,yb)+ex2(cx+s*S,cy-ztte*S,cx+s*S,yb)+dim(cx-s*S,yb,cx+s*S,yb,'SPAN '+m(P.span));
+  h+=ex2(cx-s*S,cy+L/2*S,xl-6,cy+L/2*S)+ex2(cx,cy-L/2*S,xl-6,cy-L/2*S)+dim(xl,cy-L/2*S,xl,cy+L/2*S,'LENGTH '+m(L));
+  const xc=cx+s*S+26;h+=ex2(cx+.4*S,cy-zle*S,xc+6,cy-zle*S)+ex2(cx+.4*S,cy-zte*S,xc+6,cy-zte*S)+dim(xc,cy-zle*S,xc,cy-zte*S,'CHORD '+m(g.c));}
+ /* ---- FRONT ---- */
+ {const cx=630,cy=185,X=(x,y)=>[cx+x*S,cy-y*S];
+  h+=`<text class="v" x="520" y="28">FRONT VIEW</text>`;
+  h+=`<ellipse class="o f part" cx="${cx}" cy="${cy}" rx="${.66*S}" ry="${.63*S}"><title>Fuselage section</title></ellipse>`;
+  h+=poly('o f part',[X(-s,g.wy+.1),X(s,g.wy+.1),X(s,g.wy),X(-s,g.wy)],'Wing (edge-on)');
+  h+=poly('hl',[X(-.05,f.y0),X(.05,f.y0),X(.05,f.y0+f.h),X(-.05,f.y0+f.h)],'Vertical fin');
+  h+=poly('o f',[X(-2.3,.0),X(2.3,0),X(2.3,-.07),X(-2.3,-.07)],'Tailplane');
+  for(const sg of[-1,1]){h+=poly('o f part',[X(sg*.55,.17),X(sg*1.05,.17),X(sg*1.05,-.48),X(sg*.55,-.48)],'DSI intake');
+   const r=Math.max(2.5,.065*S);if(load>=1)h+=`<circle class="o" cx="${cx+sg*s*S}" cy="${cy-(g.wy+.05)*S}" r="${r}"/>`;
+   if(load>=2)h+=`<circle class="o" cx="${cx+sg*(s*.5+.2)*S}" cy="${cy+(.12+.42)*S}" r="${.1*S}"/>`;
+   if(load>=3)h+=`<circle class="o" cx="${cx+sg*(s*.25+.2)*S}" cy="${cy+(.12+.42)*S}" r="${.1*S}"/>`;
+   if(gearDown)h+=ln(...X(sg*1.05,-.3),...X(sg*1.05,-1.8),'o')+`<rect class="o" x="${cx+sg*1.05*S-2}" y="${cy+1.8*S}" width="4" height="${.6*S}"/>`}
+  if(gearDown)h+=ln(...X(0,-.4),...X(0,-1.8),'o')+`<rect class="o" x="${cx-2}" y="${cy+1.8*S}" width="4" height="${.44*S}"/>`;
+  const yb=cy+3.4*S;h+=ex2(cx-s*S,cy,cx-s*S,yb)+ex2(cx+s*S,cy,cx+s*S,yb)+dim(cx-s*S,yb,cx+s*S,yb,'SPAN '+m(P.span));
+  const xr=cx+s*S+18;h+=ex2(cx+.2*S,cy-(f.y0+f.h)*S,xr+6,cy-(f.y0+f.h)*S)+ex2(cx+1,cy+2.08*S,xr+6,cy+2.08*S)+dim(xr,cy-(f.y0+f.h)*S,xr,cy+2.08*S,'H 4.77 m');
+  h+=lab(cx,cy-(f.y0+f.h)*S,cx+55,cy-(f.y0+f.h)*S-12,'SINGLE FIN')}
+ /* ---- SIDE ---- */
+ {const cx=410,cy=545,X=(z,y)=>[cx+z*S,cy-y*S],sd=(t0,t1,k)=>{const a=[];for(let i=0;i<=14;i++){const t=t0+(t1-t0)*i/14;a.push(X(-L/2+t*L,k*R(t)*.95))}return a};
+  h+=`<text class="v" x="20" y="470">SIDE VIEW</text>`;
+  h+=poly('o f part',[...sd(0,1,1),...sd(0,1,-1).reverse()],'Fuselage');
+  h+=poly('hl part',[...sd(.86,1,1),...sd(.86,1,-1).reverse()],'KLJ-7A AESA radome');
+  bk.forEach((t,i)=>{const z=-L/2+t*L,w=R(t)*.95;h+=ln(...X(z,-w),...X(z,w),plug.includes(i)?'bk2':'bk')});
+  h+=poly('hl',[X(f.rle,f.y0),X(f.tle,f.y0+f.h),X(f.tte,f.y0+f.h),X(f.rte,f.y0)],'Vertical stabilizer');
+  h+=poly('o f',[X(zle,g.wy+.1),X(zte,g.wy+.1),X(zte,g.wy),X(zle,g.wy)],'Wing root');
+  h+=poly('o f part',[X(g.zi-.85,.18),X(g.zi+.85,.18),X(g.zi+.85,-.48),X(g.zi-.85,-.48)],'DSI intake');
+  h+=`<ellipse class="o" cx="${cx+g.zc*S}" cy="${cy-.55*S}" rx="${1.5*S}" ry="${.38*S}"/><circle cx="${cx+g.zirst*S}" cy="${cy-.47*S}" r="3.5" fill="var(--ac)"/>`;
+  h+=poly('o f part',[X(-L/2,.5),X(-L/2-.7,.36),X(-L/2-.7,-.4),X(-L/2,-.54)],'Engine nozzle');
+  if(load>=1)h+=`<rect class="o" x="${cx+(wingAt(g,s).mid-1.45)*S}" y="${cy-(g.wy+.05)*S-2}" width="${2.9*S}" height="4"/>`;
+  if(load>=2)h+=`<rect class="o" x="${cx+(wingAt(g,s*.5+.2).mid-2)*S}" y="${cy+.46*S}" width="${4*S}" height="${.2*S}"/>`;
+  if(load>=3)h+=`<rect class="o" x="${cx+(wingAt(g,s*.25+.2).mid-2)*S}" y="${cy+.46*S}" width="${4*S}" height="${.2*S}"/>`;
+  if(gearDown){[[g.L*.28,1.4],[g.zte+g.c*.45,1.5]].forEach(([z,hh])=>{h+=ln(...X(z,-.35),...X(z,-.35-hh),'o')+`<circle class="o" cx="${cx+z*S}" cy="${cy+(.35+hh)*S}" r="${(hh>1.45?.3:.22)*S}"/>`})}
+  h+=lab(cx+L/2*S-4,cy-8,cx+L/2*S-60,cy-70,'KLJ-7A RADOME','end');
+  h+=lab(cx+g.zirst*S,cy-.47*S,cx+g.zirst*S+10,cy-62,'IRST NODE');
+  h+=lab(cx+g.zi*S,cy+.48*S,cx+g.zi*S-30,cy+92,'DSI INTAKE','end');
+  h+=lab(cx+(-L/2+bk[4]*L)*S,cy+.64*S*R(bk[4])/.66,cx+(-L/2+bk[4]*L)*S+4,cy+106,'STRETCH BULKHEAD PLUG');
+  const yb=cy+3*S+20;h+=ex2(cx-L/2*S,cy,cx-L/2*S,yb)+ex2(cx+L/2*S,cy,cx+L/2*S,yb)+dim(cx-L/2*S,yb,cx+L/2*S,yb,'OVERALL LENGTH '+m(L));}
+ $('bp').innerHTML=h;
+ const hf=(g.c+g.c*.2)/2*(s-.4),A=2*hf;$('ra').textContent=A.toFixed(1);$('rar').textContent=(P.span*P.span/A).toFixed(2);
+}
+const ex2=(a,b,c,d)=>ln(a,b,c,d,'ex');
+
+/* ===== UI ===== */
+function syncUI(){SL.forEach(([,k,,,,,u])=>{const i=$('i-'+k);if(i){i.value=P[k];i.nextElementSibling.textContent=(+P[k]).toFixed(u==' m'?2:0)+u.trim()}})}
+function initUI(){
+ SL.forEach(([grp,k,lb,mn,mx,st,u])=>{const r=document.createElement('div');r.className='row';
+  r.innerHTML=`<span>${lb}</span><input type="range" id="i-${k}" min="${mn}" max="${mx}" step="${st}"><output></output>`;$('s-'+grp).appendChild(r);
+  r.querySelector('input').addEventListener('input',e=>{P[k]=+e.target.value;syncUI();if(grp=='dim'){build();draw()}else applyRot()})});
+ $('gear').onclick=()=>{gearDown=!gearDown;$('gear').textContent='Landing gear: '+(gearDown?'DOWN':'UP');draw()};
+ $('load').onclick=()=>{load=(load+1)%LOADS.length;setLoad();draw()};
+ $('wire').onchange=applyWire;
+ $('reset').onclick=()=>{Object.assign(P,DEF);dist=30;setCam();syncUI();applyRot();build();draw()};
+ let drag=null;
+ cv.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY];cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing'});
+ cv.addEventListener('pointermove',e=>{if(!drag)return;P.ry=((P.ry+(e.clientX-drag[0])*.5+540)%360)-180;P.rx=Math.max(-90,Math.min(90,P.rx+(e.clientY-drag[1])*.4));drag=[e.clientX,e.clientY];syncUI();applyRot()});
+ cv.addEventListener('pointerup',()=>{drag=null;cv.style.cursor='grab'});
+ cv.addEventListener('wheel',e=>{e.preventDefault();dist=Math.max(12,Math.min(60,dist*(1+e.deltaY*.001)));setCam()},{passive:false});
+ new ResizeObserver(resize).observe($('v3'));
+}
+initUI();syncUI();setCam();applyRot();build();draw();resize();loop();
+</script>
+</body></html>
